@@ -1,10 +1,13 @@
 package net.kuama.documentscanner.presentation
 
 import android.content.Context
-import android.graphics.Bitmap
+import android.graphics.*
+import android.graphics.ImageFormat.*
+import android.media.Image
 import android.net.Uri
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.*
+import androidx.camera.core.Camera
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
@@ -16,6 +19,9 @@ import net.kuama.documentscanner.data.OpenCvStatus
 import net.kuama.documentscanner.domain.*
 import net.kuama.documentscanner.exceptions.NullCorners
 import net.kuama.scanner.data.Corners
+import org.opencv.android.Utils
+import org.opencv.core.Mat
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
@@ -27,6 +33,7 @@ enum class FlashStatus {
     ON, OFF
 }
 
+@androidx.camera.core.ExperimentalGetImage
 class ScannerViewModel : ViewModel() {
     /**
      * Observable data
@@ -44,7 +51,7 @@ class ScannerViewModel : ViewModel() {
     /**
      * Use cases
      */
-    private val findPaperSheetUseCase: FindPaperSheet = FindPaperSheet()
+    private val findPaperSheetUseCase: FindPaperSheetOtsu = FindPaperSheetOtsu()
     private val perspectiveTransform: PerspectiveTransform = PerspectiveTransform()
     private val uriToBitmap: UriToBitmap = UriToBitmap()
 
@@ -129,7 +136,11 @@ class ScannerViewModel : ViewModel() {
                         )
                     ) {
                         it.fold(::handleFailure) { preview ->
-                            analyze(preview, returnOriginalMat = true) { pair ->
+                            var img = Mat()
+                            val bmp = preview.copy(Bitmap.Config.ARGB_8888, true)
+                            Utils.bitmapToMat(bmp, img)
+
+                            analyze(img, preview, returnOriginalMat = true) { pair ->
                                 pair.second?.let {
                                     perspectiveTransform(
                                         PerspectiveTransform.Params(
@@ -215,14 +226,33 @@ class ScannerViewModel : ViewModel() {
                     // could not find a performing way to transform
                     // the proxy to a bitmap, so we are reading
                     // the bitmap directly from the preview view
-                    viewFinder.bitmap?.let {
-                        analyze(it, onSuccess = {
-                            proxy.close()
-                        })
-                    } ?: {
-                        corners.value = null
+
+                    val tmp = proxy.image?.toBitmap()
+
+                    proxy.image?.close()
+
+//                    viewFinder.bitmap?.let {
+//                        val img = Mat()
+//                        Utils.bitmapToMat(it, img)
+//                        it?.recycle()
+//
+//                        analyze(img!!, it, onSuccess = {
+//                            proxy.close()
+//                        })
+//                    } ?: {
+//                        corners.value = null
+//                        proxy.close()
+//                    }()
+
+
+                    val img = Mat()
+                    Utils.bitmapToMat(tmp, img)
+                    //tmp?.recycle()
+
+                    analyze(img!!, tmp!!, onSuccess = {
                         proxy.close()
-                    }()
+                    })
+
                 })
 
                 // Bind use cases to camera
@@ -241,13 +271,33 @@ class ScannerViewModel : ViewModel() {
         then.invoke()
     }
 
+    fun Image.toBitmap(): Bitmap {
+        val yBuffer = planes[0].buffer // Y
+        val vuBuffer = planes[2].buffer // VU
+
+        val ySize = yBuffer.remaining()
+        val vuSize = vuBuffer.remaining()
+
+        val nv21 = ByteArray(ySize + vuSize)
+
+        yBuffer.get(nv21, 0, ySize)
+        vuBuffer.get(nv21, ySize, vuSize)
+
+        val yuvImage = YuvImage(nv21, NV21, this.width, this.height, null)
+        val out = ByteArrayOutputStream()
+        yuvImage.compressToJpeg(Rect(0, 0, yuvImage.width, yuvImage.height), 50, out)
+        val imageBytes = out.toByteArray()
+        return BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+    }
+
     private fun analyze(
+        matrix: Mat,
         bitmap: Bitmap,
         onSuccess: (() -> Unit)? = null,
         returnOriginalMat: Boolean = false,
         callback: ((Pair<Bitmap, Corners?>) -> Unit)? = null
     ) {
-        findPaperSheetUseCase(FindPaperSheet.Params(bitmap, threshold, returnOriginalMat)) {
+        findPaperSheetUseCase(FindPaperSheetOtsu.Params(matrix, bitmap, threshold, returnOriginalMat)) {
             it.fold(::handleFailure) { pair: Pair<Bitmap, Corners?> ->
                 callback?.invoke(pair) ?: {
                     corners.value = pair.second
