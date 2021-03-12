@@ -8,6 +8,7 @@ import net.kuama.documentscanner.support.Right
 import org.opencv.android.Utils
 import org.opencv.core.CvType
 import org.opencv.core.Mat
+import org.opencv.core.Point
 import org.opencv.imgproc.Imgproc
 import kotlin.math.max
 import kotlin.math.pow
@@ -25,10 +26,17 @@ class PerspectiveTransform : UseCase<Bitmap, PerspectiveTransform.Params>() {
         val src = Mat()
         Utils.bitmapToMat(params.bitmap, src)
 
-        val tl = params.corners.corners[0] ?: error("Invalid corners")
-        val tr = params.corners.corners[1] ?: error("Invalid corners")
-        val br = params.corners.corners[2] ?: error("Invalid corners")
-        val bl = params.corners.corners[3] ?: error("Invalid corners")
+        var tl = params.corners.corners[0] ?: error("Invalid corners")
+        var tr = params.corners.corners[1] ?: error("Invalid corners")
+        var br = params.corners.corners[2] ?: error("Invalid corners")
+        var bl = params.corners.corners[3] ?: error("Invalid corners")
+
+//        tl = Point(300.0, 2500.0)
+//        tr = Point(2800.0, 2500.0)
+//        br = Point(2800.0, 300.0)
+//        bl = Point(300.0, 300.0)
+
+
         val widthA = sqrt(
             (br.x - bl.x).pow(2.0) + (br.y - bl.y).pow(2.0)
         )
