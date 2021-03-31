@@ -1,6 +1,7 @@
 package net.kuama.documentscanner.presentation
 
 import android.graphics.Bitmap
+import android.graphics.drawable.BitmapDrawable
 import android.os.Bundle
 import android.util.Log
 import android.view.View
@@ -9,6 +10,8 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.drawToBitmap
 import androidx.lifecycle.Observer
+import ja.burhanrashid52.photoeditor.PhotoEditor
+import ja.burhanrashid52.photoeditor.PhotoEditorView
 import kotlinx.android.synthetic.main.activity_scanner.*
 import net.kuama.documentscanner.R
 import net.kuama.documentscanner.data.Loader
@@ -18,7 +21,9 @@ abstract class BaseScannerActivity : AppCompatActivity() {
     private lateinit var viewModel: ScannerViewModel
 
     private var thresholdValue = 48
-    private lateinit var bitmap: Bitmap
+
+    //    private lateinit var bitmap: Bitmap
+    private lateinit var mPhotoEditor: PhotoEditor
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -55,9 +60,18 @@ abstract class BaseScannerActivity : AppCompatActivity() {
         })
 
         viewModel.documentPreview.observe(this, Observer {
-            documentPreview.setImageBitmap(it)
-            bitmap = it
+//            documentPreview.setImageBitmap(it)
+            documentPreview.source.setImageBitmap(it)
+
+//            bitmap = it
             previewWrap.visibility = View.VISIBLE
+
+
+            mPhotoEditor = PhotoEditor.Builder(this, documentPreview)
+                .setPinchTextScalable(true)
+                .build()
+
+            mPhotoEditor.setBrushDrawingMode(true)
         })
 
         viewModel.flashStatus.observe(this, Observer { status ->
